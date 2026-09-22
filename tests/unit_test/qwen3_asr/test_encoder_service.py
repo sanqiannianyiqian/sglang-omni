@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from collections.abc import Iterator
@@ -13,8 +14,8 @@ from sglang.srt.managers.schedule_batch import Modality, MultimodalDataItem
 
 from sglang_omni.models.qwen3_asr.encoder_service import (
     Qwen3ASRPreLMEncoderService,
-    _expected_audio_tokens,
     build_cache_namespace,
+    expected_audio_tokens,
 )
 
 _HIDDEN_SIZE = 4
@@ -82,7 +83,7 @@ class _StubModel(torch.nn.Module):
             raise RuntimeError("multi-item boom")
         parts = []
         for item in items:
-            rows = _expected_audio_tokens(item) + self.row_offset
+            rows = expected_audio_tokens(item) + self.row_offset
             fill = float((getattr(item, "hash", None) or 0) % 97 + 1)
             parts.append(torch.full((rows, _HIDDEN_SIZE), fill, dtype=self.dtype))
         packed = torch.cat(parts, dim=0)
@@ -214,18 +215,27 @@ def test_batch_context_unwinds_inference_mode_when_stream_context_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = object.__new__(Qwen3ASRPreLMEncoderService)
-    service._stream = object()
+    service._stream = SimpleNamespace(device=torch.device("cuda", 0))
 
-    def fail_stream(_stream):  # noqa: ANN001, ANN202
-        raise RuntimeError("stream context failed")
+    class _FakeDeviceModule:
+        def __init__(self) -> None:
+            self.stream_calls: list[object] = []
 
-    monkeypatch.setattr(torch.cuda, "stream", fail_stream)
+        @contextlib.contextmanager
+        def stream(self, stream):  # noqa: ANN001, ANN202
+            self.stream_calls.append(stream)
+            raise RuntimeError("stream context failed")
+            yield
+
+    device_module = _FakeDeviceModule()
+    monkeypatch.setattr(torch, "get_device_module", lambda _device=None: device_module)
 
     assert not torch.is_inference_mode_enabled()
     with pytest.raises(RuntimeError, match="stream context failed"):
-        with service._batch_context():
+        with service.batch_context():
             pass
     assert not torch.is_inference_mode_enabled()
+    assert device_module.stream_calls == [service._stream]
 
 
 def test_cache_hit_skips_reencode() -> None:
@@ -557,7 +567,7 @@ def test_invalid_cache_entry_is_evicted_and_reencoded() -> None:
     probe = _item(42, 3)
     service.encode_item(probe)
     assert model.encode_calls == 1
-    key = service._cache_key(probe)
+    key = service.cache_key(probe)
 
     for poison in (
         torch.zeros(5, _HIDDEN_SIZE),
@@ -617,8 +627,8 @@ def test_expected_audio_tokens_uses_request_metadata() -> None:
         feature=torch.zeros(1, 128, 300),
         model_specific_data={"num_audio_tokens": 5},
     )
-    assert _expected_audio_tokens(explicit) == 5
-    assert _expected_audio_tokens(MultimodalDataItem(modality=Modality.AUDIO)) is None
+    assert expected_audio_tokens(explicit) == 5
+    assert expected_audio_tokens(MultimodalDataItem(modality=Modality.AUDIO)) is None
 
 
 def test_build_cache_namespace_is_stable_and_scoped() -> None:
@@ -699,7 +709,7 @@ def test_the_device_cache_is_really_reclaimed_after_an_oom() -> None:
         reserved_before = device_module.memory_reserved()
         assert reserved_before > floor
 
-        service._recover_after_failure(torch.OutOfMemoryError("encoder OOM"))
+        service.recover_after_failure(torch.OutOfMemoryError("encoder OOM"))
 
         device_module.synchronize()
         assert device_module.memory_reserved() < reserved_before
