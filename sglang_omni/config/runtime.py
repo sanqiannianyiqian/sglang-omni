@@ -95,8 +95,8 @@ def resolve_stage_typed_kwargs(stage_cfg: StageConfig) -> dict[str, Any]:
                 and server_args_overrides.get("enable_torch_compile")
             ):
                 logger.warning(
-                    "enable_torch_compile on NPU is not supported "
-                    "(dynamo crashes); disabling to avoid silent no-op or crash."
+                    "enable_torch_compile is not supported on NPU(dynamo crashes);"
+                    " disabling to avoid silent no-op or crash."
                 )
                 server_args_overrides = dict(server_args_overrides)
                 server_args_overrides["enable_torch_compile"] = False
