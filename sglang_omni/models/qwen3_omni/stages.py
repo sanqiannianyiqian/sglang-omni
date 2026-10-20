@@ -51,6 +51,35 @@ THINKER_STAGE = "thinker"
 
 logger = logging.getLogger(__name__)
 
+
+def _disable_torch_compile_on_npu(
+    server_args_overrides: Mapping[str, object] | None,
+) -> Mapping[str, object] | None:
+    """Keep Qwen3-Omni from enabling torch.compile on NPU.
+
+    NPU graph capture reaches several known dynamo/Triton/ATB incompatibilities,
+    so set the switch explicitly instead of relying on the builder default.
+    """
+    from sglang_omni.platforms import current_platform
+
+    if not current_platform.is_npu():
+        return server_args_overrides
+    else:
+        pass
+
+    if server_args_overrides and server_args_overrides.get("enable_torch_compile"):
+        logger.warning(
+            "Qwen3-Omni: torch.compile is disabled on NPU due to known "
+            "dynamo/Triton/ATB incompatibilities."
+        )
+    else:
+        pass
+
+    overrides = dict(server_args_overrides or {})
+    overrides["enable_torch_compile"] = False
+    return overrides
+
+
 # Image-encoder batching budget; the multiplier accounts for transient activations.
 QWEN3_IMAGE_ENCODER_BATCH_BUDGET_BYTES = 10 * 1024**3
 QWEN3_IMAGE_ENCODER_ACTIVATION_MULTIPLIER = 5
@@ -1170,6 +1199,7 @@ def create_sglang_thinker_executor_from_config(
     # the streaming-SST thinker path benefits out of the box; either key can be
     # overridden via server_args_overrides (set enable_mixed_chunk=False to opt
     # out). Note: mixed-chunk only engages when chunked_prefill_size > 0.
+    server_args_overrides = _disable_torch_compile_on_npu(server_args_overrides)
     overrides = build_generation_batch_overrides(
         max_running_requests=64,
         server_args_overrides=server_args_overrides,
@@ -1340,6 +1370,7 @@ def create_talker_ar_executor_from_config(
         prefill_graph_backend = CudaGraphBackend.BREAKABLE
     else:
         prefill_graph_backend = CudaGraphBackend.DISABLED
+    server_args_overrides = _disable_torch_compile_on_npu(server_args_overrides)
     overrides = build_generation_batch_overrides(
         max_running_requests=32,
         server_args_overrides=server_args_overrides,

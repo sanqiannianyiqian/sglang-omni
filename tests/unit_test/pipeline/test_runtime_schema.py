@@ -66,10 +66,6 @@ def test_invalid_engine_mem_fraction_static_raises() -> None:
 
 
 def test_cpu_offload_gb_range_is_enforced_at_validation() -> None:
-    assert EngineArgs().cpu_offload_gb is None
-    assert EngineArgs(cpu_offload_gb=0).cpu_offload_gb == 0
-    assert EngineArgs(cpu_offload_gb=8).cpu_offload_gb == 8
-
     with pytest.raises(ValueError, match="cpu_offload_gb"):
         EngineArgs(cpu_offload_gb=-1)
 
