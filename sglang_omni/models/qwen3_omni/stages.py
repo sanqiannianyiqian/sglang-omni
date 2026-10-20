@@ -69,7 +69,7 @@ THINKER_STAGE = "thinker"
 logger = logging.getLogger(__name__)
 
 
-def _disable_torch_compile_on_npu(
+def disable_torch_compile_on_npu(
     server_args_overrides: Mapping[str, object] | None,
 ) -> Mapping[str, object] | None:
     """Keep Qwen3-Omni from enabling torch.compile on NPU.
@@ -1261,7 +1261,7 @@ def create_sglang_thinker_executor_from_config(
         prefill_graph_backend = CudaGraphBackend.BREAKABLE
     else:
         prefill_graph_backend = CudaGraphBackend.DISABLED
-    server_args_overrides = _disable_torch_compile_on_npu(server_args_overrides)
+    server_args_overrides = disable_torch_compile_on_npu(server_args_overrides)
     overrides = build_generation_batch_overrides(
         max_running_requests=64,
         server_args_overrides=server_args_overrides,
@@ -1433,7 +1433,7 @@ def create_talker_ar_executor_from_config(
         prefill_graph_backend = CudaGraphBackend.BREAKABLE
     else:
         prefill_graph_backend = CudaGraphBackend.DISABLED
-    server_args_overrides = _disable_torch_compile_on_npu(server_args_overrides)
+    server_args_overrides = disable_torch_compile_on_npu(server_args_overrides)
     overrides = build_generation_batch_overrides(
         max_running_requests=max_running_requests,
         server_args_overrides=server_args_overrides,
