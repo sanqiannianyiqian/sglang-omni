@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+from huggingface_hub import hf_hub_download
 from transformers import WhisperFeatureExtractor
 
-from .semantic_vad import SemanticEOUModel
+from sglang_omni.audio.semantic_vad import SemanticEOUModel
 
 if TYPE_CHECKING:
     from onnxruntime import InferenceSession
@@ -84,8 +85,11 @@ def load_smart_turn() -> SmartTurnEOU | None:
 
 
 def resolve_model_path(model_path: Path | str) -> Path:
+    """The model file at a local path, in a local directory, or in a Hugging Face repository downloaded to the cache."""
     path = Path(model_path).expanduser()
-    if path.is_dir():
+    if not path.exists() and str(model_path).count("/") == 1:
+        path = Path(hf_hub_download(str(model_path), SMART_TURN_MODEL_FILENAME))
+    elif path.is_dir():
         path = path / SMART_TURN_MODEL_FILENAME
     else:
         pass
