@@ -217,3 +217,22 @@ To run the installation:
 # Specify your device type as the first argument (910b or A3)
 bash scripts/npu/install_npu_torchcodec.sh A3
 ```
+
+## Model notes
+
+### MiniCPM-o
+
+MiniCPM-o runs on Ascend 910 with its NPU pipeline configuration:
+
+```bash
+python -m sglang_omni.cli serve \
+  --model-path openbmb/MiniCPM-o-4_5 \
+  --config examples/configs/minicpm_o_npu.yaml \
+  --port 8000
+```
+
+The configuration uses SGLang's `ascend` attention backend, keeps AR decode
+graphs enabled, and runs the image and audio encoders on their own NPU stream.
+On NPU the reference audio for voice cloning is decoded through the soundfile
+fallback because torchcodec is not usable in NPU images. Validated on Ascend
+910 / CANN 9.1.0 / torch 2.10 / torch_npu 2.10.0.post6 / SGLang 0.5.22.

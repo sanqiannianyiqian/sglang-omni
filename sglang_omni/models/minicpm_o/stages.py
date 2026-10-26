@@ -76,7 +76,7 @@ def create_encoder_executor(
 ) -> SimpleScheduler[StagePayload, StagePayload]:
     device_module = torch.get_device_module(encoder.device)
     if encoder.device.type == "npu":
-        # implicit encoder host sync must not wait on AR graph updates.
+        # note (guomangmang): encoder sync must not wait on AR graph updates.
         encoder_stream = device_module.Stream(device=encoder.device)
         encoder_stream.wait_stream(device_module.current_stream(encoder.device))
     else:
@@ -107,7 +107,7 @@ def create_encoder_executor(
                 encoder_out = encoder(**request.model_inputs)
                 cache.put(request.cache_key, encoder_out)
                 if encoder_stream is not None:
-                    # downstream stages consume tensors on other streams.
+                    # note (guomangmang): downstream stages read on other streams.
                     encoder_stream.synchronize()
                 else:
                     pass

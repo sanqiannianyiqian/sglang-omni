@@ -25,23 +25,8 @@ python -m sglang_omni.cli serve --model-path openbmb/MiniCPM-o-4_5 --text-only -
 
 ## Ascend NPU
 
-Chat, vision, video, TTS, voice cloning, and full-duplex also run on Ascend
-910. Install the NPU stack first (see
-[Installation — Ascend NPU](../get_started/installation_npu.md)), then start
-with the NPU pipeline configuration:
-
-```bash
-python -m sglang_omni.cli serve \
-  --model-path openbmb/MiniCPM-o-4_5 \
-  --config examples/configs/minicpm_o_npu.yaml \
-  --port 8000
-```
-
-The NPU configuration uses SGLang's `ascend` attention backend, keeps AR decode
-graphs enabled, and runs the image and audio encoders on their own NPU stream.
-On NPU the reference audio for voice cloning is decoded through the soundfile
-fallback because torchcodec is not usable in NPU images. Validated on Ascend
-910 / CANN 9.1.0 / torch 2.10 / torch_npu 2.10.0.post6 / SGLang 0.5.22.
+See [Installation — Ascend NPU](../get_started/installation_npu.md#minicpm-o)
+for the NPU launch command, configuration, and validated versions.
 
 ## Normal Usage
 

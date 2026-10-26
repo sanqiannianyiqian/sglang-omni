@@ -247,9 +247,7 @@ class Token2Wav(torch.nn.Module):
 
     @torch.inference_mode()
     def prepare_prompt(self, source: str | io.BytesIO) -> SpeakerPrompt:
-        # torchaudio 2.10+ decodes through torchcodec, whose wheels in NPU
-        # images link CUDA-only libraries and cannot load; on NPU fall back to
-        # the soundfile-capable helper. CUDA/XPU keep the native loader.
+        # note (guomangmang): NPU lacks torchcodec, so use the soundfile fallback.
         if current_platform.is_npu():
             audio, sample_rate = load_with_torchaudio(
                 source, source_name="MiniCPM-o reference"

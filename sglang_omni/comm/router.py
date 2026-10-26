@@ -438,12 +438,9 @@ def tensor_devices(obj: object, seen: set[int] | None = None) -> set[str]:
         pass
     seen.add(obj_id)
     if isinstance(obj, torch.Tensor):
-        if obj.device.type in ("cpu", "musa"):
+        if obj.device.type in ("cpu", "musa", "npu"):
+            # note (guomangmang): NPU reports is_cuda=True; match the type first.
             return {obj.device.type}
-        elif obj.device.type == "npu":
-            # is_cuda reports True for Ascend NPU tensors (torch_npu patch),
-            # so check the device type directly.
-            return {"npu"}
         else:
             pass
         if obj.is_cuda:
