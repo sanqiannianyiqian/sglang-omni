@@ -82,6 +82,7 @@ PROFILE_NAMES = (
     "nemotron-stage-qwen3-tts",
     "qwen3-asr-qwen3-tts-vivian",
     "qwen3-asr-qwen3.8-27b-vivian",
+    "qwen3-asr-streaming-qwen3-tts-vivian",
 )
 HTTP_PROFILE = PROFILES / "nemotron-qwen3-tts" / "launch.yaml"
 CASCADE_PORTS = SessionPorts(
@@ -963,6 +964,15 @@ def test_profile_graph_turns_formats_and_ports():
     assert settings.node("dialog").required == dialog_formats
 
 
+def test_a_dialog_without_the_input_interrupt_edge_grants_no_client_stop():
+    """A client response.cancel travels the control edges from the input, and a graph without one fails the control, so its ports must not offer it."""
+    dialog = yaml.safe_load(HTTP_PROFILE.read_text())["session_nodes"]["dialog"]
+    input_interrupt = {"kind": "control", "source": "input", "event": "interrupt"}
+    inputs = [entry for entry in dialog["inputs"] if entry != input_interrupt]
+    deaf = declared(nodes={"dialog": {**dialog, "inputs": inputs}})
+    assert INTERRUPT not in deaf.component_graph().ports(200).controls
+
+
 def test_segmenter_gates_on_speech_controls():
     segmenter = UtteranceSegmenter()
     first = TimedChunk(AUDIO, 0, 100, 0, QUIET, format=PCM16)
@@ -1010,6 +1020,40 @@ async def test_realtime_transcription_streams_partials_then_final_per_utterance(
         "sglang.input_audio.end",
         "session.close",
     ]
+
+
+@pytest.mark.asyncio
+async def test_streaming_transcription_streams_partials_then_the_final_with_its_language(
+    transcription_session_server,
+):
+    base_url, appended, client_events = transcription_session_server
+    frames = [bytes([index]) * 640 for index in range(4)]
+    audio = [
+        TimedChunk(AUDIO, index * 20, 20, index, frame, format=PCM16)
+        for index, frame in enumerate(frames)
+    ]
+    spec = {
+        "kind": "streaming_transcription",
+        "base_url": base_url,
+        "model": "Qwen/Qwen3-ASR-1.7B",
+        "decode_interval_ms": 600,
+    }
+    outputs = await drain(build(spec), [*audio, control_chunk(COMMIT)])
+    assert [chunk.payload for chunk in outputs] == [
+        {"text": "hello", "is_final": False},
+        {"text": "hello there", "is_final": False},
+        {"text": "hello there", "is_final": True, "language": "English"},
+    ]
+    assert appended == frames
+    assert [event["type"] for event in client_events] == [
+        "session.update",
+        *["input_audio_buffer.append"] * 4,
+        "transcription.done",
+    ]
+    assert client_events[0]["session"] == {
+        "turn_detection": None,
+        "decode_interval_ms": 600,
+    }
 
 
 @pytest.mark.asyncio
@@ -1515,6 +1559,12 @@ def test_every_profile_takes_reply_progress_from_a_forced_aligner(profile):
         for edge in settings.node("dialog").controls
         if edge.event == REPLY_PROGRESS
     ] == ["aligner"]
+
+
+@pytest.mark.parametrize("profile", PROFILE_NAMES)
+def test_every_profile_publishes_the_aligners_reply_progress(profile):
+    # note (luojiaxuan): the client's sglang.response.progress, which moves the caption with playback, comes only from a published node.
+    assert SESSION_CONTROL in profile_config(profile).session_publish["aligner"]
 
 
 def test_the_reference_profile_routes_reply_progress_through_the_aligner():
