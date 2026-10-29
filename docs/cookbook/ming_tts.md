@@ -31,7 +31,8 @@ the checkpoint:
 hf download inclusionAI/Ming-omni-tts-16.8B-A3B
 ```
 
-The provided configuration uses TP1 on GPU 0.
+The provided configuration uses TP1 on GPU 0. For Ascend NPU, see
+[Ming-Omni-TTS on NPU](../get_started/installation_npu.md#ming-omni-tts).
 
 ## Server Configuration
 

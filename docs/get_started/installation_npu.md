@@ -246,3 +246,26 @@ graphs enabled, and runs the image and audio encoders on their own NPU stream.
 On NPU the reference audio for voice cloning is decoded through the soundfile
 fallback because torchcodec is not usable in NPU images. Validated on Ascend
 910 / CANN 9.1.0 / torch 2.10 / torch_npu 2.10.0.post6 / SGLang 0.5.22.
+
+### Ming-Omni-TTS
+
+Ming-Omni-TTS runs on Ascend 910 with its NPU pipeline configuration:
+
+```bash
+python -m sglang_omni.cli serve \
+  --model-path inclusionAI/Ming-omni-tts-16.8B-A3B \
+  --config examples/configs/ming_omni_tts_npu.yaml \
+  --port 8000
+```
+
+The configuration keeps `preprocessing` on CPU and co-locates
+`reference_encode`, `tts_engine` and `audio_decode` on one NPU device with
+declared memory fractions (0.08 / 0.72 / 0.12). `tts_engine` uses SGLang's
+`ascend` attention backend with AR decode graphs enabled, and the acoustic tail
+falls back to native RoPE because the platform provides no joint in-place RoPE
+kernel. Streaming `audio_decode` resolves to eager: the AudioVAE overlap-add
+runs on CPU and copying its result back inside a capture raises
+`107027 stream is captured`. Reference audio is decoded through the soundfile
+fallback when TorchCodec is unavailable. Validated on Ascend 910 / CANN 9.1.0 /
+torch 2.10 / torch_npu 2.10.0.post6 / SGLang 0.5.22.
+
