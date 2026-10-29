@@ -47,7 +47,7 @@ class NPUOmniPlatform(OmniPlatform):
         return False
 
     def supports_graph_captured_fft(self) -> bool:
-        """Disabled: the CPU overlap-add fails inside a capture (107027)."""
+        """Disabled: the CPU-side overlap-add fails inside a capture (107027)."""
         return False
 
     def get_torch_profiler(self) -> TorchProfiler:
