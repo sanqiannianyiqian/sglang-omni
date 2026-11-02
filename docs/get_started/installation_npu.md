@@ -227,3 +227,40 @@ For normal pipeline launches, `PER_STREAM_QUEUE=1` is set by default before spaw
 When pre-LM encoding and any encoder, decode, or prefill graph backend are enabled on NPU, startup rejects incompatible queue or launch-blocking settings instead of silently overriding them. This check does not apply when pre-LM encoding is disabled or all three graph paths are disabled. For direct engine construction outside the pipeline launcher, configure these variables before initializing the NPU runtime; the engine validates them but does not supply the pipeline's default.
 
 Use a torch_npu build that supports per-stream Host task queues. The feature is experimental and does not support process-level online recovery. Although per-stream queues support TaskQueue modes `1` and `2`, NPU graph capture rejects mode `2`; this graph configuration therefore requires mode `1`. Mode `0` disables the per-stream queues required by this path. Additional queue threads and cross-stream event ordering may add overhead. See the [TorchNPU stream-level TaskQueue documentation](https://www.hiascend.com/document/detail/en/Pytorch/2610/devguide/fwfeatures/docs/en/framework_feature_guide_pytorch/stream_taskqueue_parallel_delivery.md) for runtime constraints.
+
+## Model notes
+
+### ZONOS2 (MoE TTS, single NPU)
+
+ZONOS2 needs the Descript DAC codec. `--no-deps` is required:
+`descript-audiotools==0.7.2` pins `protobuf<3.20`, which would downgrade this
+environment's `protobuf`. The other packages on the line are the codec's own
+dependencies.
+
+```bash
+pip install --no-deps "descript-audiotools==0.7.2" "descript-audio-codec==1.0.0" \
+  argbind julius pyloudnorm pystoi torch-stoi flatten-dict randomname \
+  ffmpy fire markdown2 importlib_resources \
+  tensorboard tensorboard-data-server absl-py Markdown Werkzeug
+python -c "import dac; print('ok')"
+```
+
+Voice cloning transcodes the reference clip with **ffmpeg**, so `ffmpeg` must be on
+`PATH`. Then serve — `params.json` auto-selects the architecture, so `--model-path`
+is all that is needed:
+
+```bash
+sgl-omni serve --model-path Zyphra/zonos2 --host 0.0.0.0 --port 8000
+# clone a voice from a reference clip:
+curl -s -X POST http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"input":"Hello from Ascend NPU.",
+       "references":[{"audio_path":"/path/to/ref.wav","text":"reference transcript"}]}' \
+  -o out.wav
+```
+
+On NPU, ZONOS2 keeps its MoE experts in bf16 because no fp8 expert kernel is
+registered for this SoC, and leaves `torch.compile` off because the torch_npu inductor
+backend cannot compile its graphs; decode graphs stay on (`bs=[1, 2, 4, 8, 16]`).
+Both are applied automatically from the platform capabilities. Validated on
+Ascend 910 / CANN 9.1.0 / torch 2.10 / torch_npu 2.10.0.post6 / SGLang 0.5.22.

@@ -222,6 +222,15 @@ def test_each_platform_names_the_graph_backend_its_hardware_uses() -> None:
             assert isinstance(backend, backend_class), platform_class.__name__
 
 
+def test_npu_platform_serves_zonos2_bf16_without_torch_compile() -> None:
+    """No fp8 expert kernel is registered for the NPU SoCs, and torch_npu's inductor
+    backend cannot compile the ZONOS2 graphs, so ZONOS2 takes bf16 experts and keeps
+    its decode graph free of torch.compile."""
+    platform = NPUOmniPlatform()
+    assert platform.supports_fp8_moe() is False
+    assert platform.enable_zonos2_torch_compile() is False
+
+
 def test_a_platform_declines_a_device_that_is_not_its_own() -> None:
     """A caller holding a tensor's device does not have to check that first."""
     platform = CUDAOmniPlatform()
